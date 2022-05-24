@@ -53,7 +53,7 @@ func TemplateCommitMessage(tpl *template.Template, appName string, changeList []
 	for _, c := range changeList {
 		newTag := c.NewTag.String()
 		image := c.Image.ImageName
-		applicationName, CommitId := GetApplicationDetails(newTag, image)
+		applicationName, CommitId := ParseImageTag(newTag, image)
 		log.Infof("Commit ID for deployment: ", CommitId)
 		CommitMessage, Author, err := GetCommitDetails(CommitId, os.Getenv("PAT"), applicationName, os.Getenv("organisation"))
 		if err != nil {
@@ -76,8 +76,9 @@ func TemplateCommitMessage(tpl *template.Template, appName string, changeList []
 	return cmBuf.String()
 }
 
-// Get repo name and commit id from Image tag and image name
-func GetApplicationDetails(newTag, Image string) (string, string) {
+func ParseImageTag(newTag, Image string) (string, string) {
+	// Get repo name and commit id from Image tag and image name
+	// In our case image tags are following two formats checking the format and taking commit Id from image tag.
 	applicationName := (strings.Split(Image, "/"))[1]
 	Commit := (strings.Split(newTag, "-"))
 	var CommitId string
