@@ -78,15 +78,10 @@ func TemplateCommitMessage(tpl *template.Template, appName string, changeList []
 
 func ParseImageTag(newTag, Image string) (string, string) {
 	// Get repo name and commit id from Image tag and image name
-	// In our case image tags are following two formats checking the format and taking commit Id from image tag.
 	applicationName := (strings.Split(Image, "/"))[1]
 	Commit := (strings.Split(newTag, "-"))
-	var CommitId string
-	if len(CommitId) < 5 {
-		CommitId = Commit[4]
-	} else {
-		CommitId = Commit[1]
-	}
+	// var CommitId string
+	CommitId := Commit[len(Commit)-1]
 	return applicationName, CommitId
 }
 
