@@ -318,6 +318,7 @@ func UpdateApplication(updateConf *UpdateConfiguration, state *SyncIterationStat
 		}
 		if len(changeList) > 0 && updateConf.GitCommitMessage != nil {
 			wbc.GitCommitMessage = TemplateCommitMessage(updateConf.GitCommitMessage, updateConf.UpdateApp.Application.Name, changeList)
+
 		}
 	}
 
