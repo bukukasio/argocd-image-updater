@@ -38,8 +38,7 @@ func TemplateCommitMessage(tpl *template.Template, appName string, changeList []
 		Image         string
 		OldTag        string
 		NewTag        string
-		Author        string
-		CommitMessage string
+		CommitHistory string
 	}
 
 	type commitMessageTemplate struct {
@@ -52,14 +51,14 @@ func TemplateCommitMessage(tpl *template.Template, appName string, changeList []
 	changes := make([]commitMessageChange, 0)
 	for _, c := range changeList {
 		newTag := c.NewTag.String()
+		oldTag := c.OldTag.String()
 		image := c.Image.ImageName
-		applicationName, CommitId := ParseImageTag(newTag, image)
-		log.Infof("Commit ID for deployment: ", CommitId)
-		CommitMessage, Author, err := GetCommitDetails(CommitId, os.Getenv("PAT"), applicationName, os.Getenv("organisation"))
+		applicationName, OldCommitId, NewCommitId := ParseImageTag(newTag, oldTag, image)
+		CommitHistory, err := GetCommitDetails(NewCommitId, OldCommitId, os.Getenv("PAT"), applicationName, os.Getenv("organisation"))
 		if err != nil {
 			log.Errorf("Unable to get details", err)
 		}
-		changes = append(changes, commitMessageChange{c.Image.ImageName, c.OldTag.String(), c.NewTag.String(), Author, CommitMessage})
+		changes = append(changes, commitMessageChange{c.Image.ImageName, c.OldTag.String(), c.NewTag.String(), CommitHistory})
 
 	}
 
@@ -76,13 +75,16 @@ func TemplateCommitMessage(tpl *template.Template, appName string, changeList []
 	return cmBuf.String()
 }
 
-func ParseImageTag(newTag, Image string) (string, string) {
+func ParseImageTag(newTag, oldTag, Image string) (string, string, string) {
 	// Get repo name and commit id from Image tag and image name
 	applicationName := (strings.Split(Image, "/"))[1]
-	Commit := (strings.Split(newTag, "-"))
 	// var CommitId string
-	CommitId := Commit[len(Commit)-1]
-	return applicationName, CommitId
+	newCommit := (strings.Split(newTag, "-"))
+	NewCommitId := newCommit[len(newCommit)-1]
+
+	oldCommit := (strings.Split(oldTag, "-"))
+	OldCommitId := oldCommit[len(oldCommit)-1]
+	return applicationName, NewCommitId, OldCommitId
 }
 
 // TemplateBranchName parses a string to a template, and returns a
@@ -430,7 +432,11 @@ var _ changeWriter = writeKustomization
 // code for get commit details
 
 type Body struct {
+	Commits []Commits `json:"commits"`
+}
+type Commits struct {
 	Commit Commit `json:"commit"`
+	Sha    string `json:"sha"`
 }
 
 type Commit struct {
@@ -444,47 +450,47 @@ type Author struct {
 }
 
 // This function will return commit author and commit message of commit id. For authentication used base64 encoded personal access token along withrepo and organisation name
-//  example: GetCommitDetails("3b5768e", "Z2hwX21xeXZBNDNzNmRkQWM3WjJYQjJJMHlNTU53SUxvbjFvdTVaYg==", "tokko-merchant-web", "organisation")
-func GetCommitDetails(commitsha, accesstoken, repo, organisation string) (string, string, error) {
-
-	req, err := http.NewRequest("GET", "https://api.github.com/repos/"+organisation+"/"+repo+"/commits/"+commitsha, nil)
+func GetCommitDetails(NewCommitsha, Oldcommitsha, accesstoken, repo, organisation string) (string, error) {
+	req, err := http.NewRequest("GET", "https://api.github.com/repos/"+organisation+"/"+repo+"/compare/"+NewCommitsha+"..."+Oldcommitsha, nil)
 	if err != nil {
 		log.Errorf("Unable Create a Request", err)
-		return "", "", err
+		return "", err
 	}
 	req.Header.Set("Authorization", "Basic "+accesstoken)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Errorf("Execute command", err)
-		return "", "", err
+		return "", err
 	}
 	defer resp.Body.Close()
-
+	print(resp.StatusCode)
 	if resp.StatusCode == http.StatusOK {
+
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.Errorf("Error in Reading Response", err)
-			return "", "", err
+			return "", err
 		}
 		resp := Body{}
 		jsonErr := json.Unmarshal(bodyBytes, &resp)
 		if jsonErr != nil {
 			log.Errorf("json Error", jsonErr)
-			return "", "", err
+			return "", err
 		}
-
-		commitMessage := resp.Commit.Message
-		commitAuthor := resp.Commit.Author
-		log.Infof(resp.Commit.Message)
-		log.Infof(resp.Commit.Author.Name)
-		// bodyString := string(bodyBytes)
-		// log.Info(bodyString)
-		return commitMessage, commitAuthor.Name, nil
+		count := 0
+		template := ""
+		CommitURL := ""
+		for _, value := range resp.Commits {
+			CommitURL = "https://github.com/" + organisation + "/" + repo + "/commit/" + value.Sha
+			count++
+			template += "Author  " + ": " + value.Commit.Author.Name + "\n" + "Message " + ": " + value.Commit.Message + "\n" + "URL: " + CommitURL + "\n\n"
+		}
+		return template, nil
 	} else {
 		log.Errorf("Invalid details provided!")
 		err := errors.New("invalid details provided")
-		return "", "", err
+		return "", err
 	}
 
 }
